@@ -8,20 +8,22 @@ from app.core.logging import logger
 router = APIRouter(tags=["Health"])
 
 
-@router.get(
+@router.api_route(
     "/health",
+    methods=["GET", "HEAD"],
     summary="Service Health Check",
-    description="Returns overall health status of the application.",
+    description="Returns overall health status of the application. Supports both GET and HEAD requests for health probes and load balancers.",
     status_code=status.HTTP_200_OK,
 )
 async def health_check():
     return {"status": "ok"}
 
 
-@router.get(
+@router.api_route(
     "/health/db",
+    methods=["GET", "HEAD"],
     summary="Database Connectivity Check",
-    description="Verifies async PostgreSQL database connectivity with a ping query.",
+    description="Verifies async PostgreSQL database connectivity with a ping query. Supports both GET and HEAD requests.",
     status_code=status.HTTP_200_OK,
 )
 async def health_db_check(db: AsyncSession = Depends(get_db)):

@@ -60,8 +60,9 @@ and manages proactive reminders.
     register_exception_handlers(app)
 
     # Register Routes
-    # Health checks at root level
+    # Health checks at root level and api v1 level (supporting GET and HEAD)
     app.include_router(health_router)
+    app.include_router(health_router, prefix=settings.API_V1_STR)
 
     # API v1 endpoints
     app.include_router(notifications_router, prefix=settings.API_V1_STR)
