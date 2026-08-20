@@ -69,25 +69,48 @@ class DateService:
                     hr += 12
                 elif meridiem == "am" and hr == 12:
                     hr = 0
-                target_time = time(hr, mn)
+                target_time = time(hr, mn, 0)
             else:
-                target_time = time(17, 0)  # Default 5:00 PM local
+                target_time = time(17, 0, 0)  # Default 5:00 PM local
             local_dt = user_tz.localize(datetime.combine(target_date, target_time))
             return local_dt.astimezone(timezone.utc)
 
-        # 2. 'today' / 'tonight' / 'this evening'
+        # 2. 'at 6pm' / 'by 6pm' / 'at 6:30' / 'meeting at 6' (today or tomorrow)
+        at_match = re.search(r"(?:at|by)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", text)
+        if at_match and "tomorrow" not in text and "in " not in text:
+            hr = int(at_match.group(1))
+            mn = int(at_match.group(2) or 0)
+            meridiem = at_match.group(3)
+            if meridiem == "pm" and hr < 12:
+                hr += 12
+            elif meridiem == "am" and hr == 12:
+                hr = 0
+            elif meridiem is None and hr <= 11 and hr >= 1:
+                # If hour is 1-6 without am/pm, default to afternoon/evening
+                if hr < 7:
+                    hr += 12
+
+            target_date = now_local.date()
+            target_time = time(hr, mn, 0)
+            local_dt = user_tz.localize(datetime.combine(target_date, target_time))
+            # If the time is already past for today, schedule it for tomorrow
+            if local_dt <= now_local:
+                local_dt = local_dt + timedelta(days=1)
+            return local_dt.astimezone(timezone.utc)
+
+        # 3. 'today' / 'tonight' / 'this evening'
         if "today" in text or "tonight" in text or "this evening" in text:
             target_date = now_local.date()
             if "tonight" in text or "this evening" in text:
-                target_time = time(20, 0)
+                target_time = time(20, 0, 0)
             else:
-                target_time = time(18, 0)
+                target_time = time(18, 0, 0)
             local_dt = user_tz.localize(datetime.combine(target_date, target_time))
             if local_dt <= now_local:
                 local_dt = now_local + timedelta(hours=2)
             return local_dt.astimezone(timezone.utc)
 
-        # 3. 'after 6' or 'after 6pm' or 'after 6:00'
+        # 4. 'after 6' or 'after 6pm' or 'after 6:00'
         after_match = re.search(r"after\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", text)
         if after_match:
             hr = int(after_match.group(1))
@@ -99,13 +122,13 @@ class DateService:
                 hr += 12
 
             target_date = now_local.date()
-            target_time = time(hr, mn)
+            target_time = time(hr, mn, 0)
             local_dt = user_tz.localize(datetime.combine(target_date, target_time))
             if local_dt <= now_local:
                 local_dt = local_dt + timedelta(days=1)
             return local_dt.astimezone(timezone.utc)
 
-        # 4. 'in X hours' / 'in X minutes' / 'in X days'
+        # 5. 'in X hours' / 'in X minutes' / 'in X days'
         rel_match = re.search(r"in\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(hour|minute|day|week)s?", text)
         if rel_match:
             num_words = {
@@ -125,25 +148,25 @@ class DateService:
                 res_local = now_local + timedelta(weeks=qty)
             return res_local.astimezone(timezone.utc)
 
-        # 5. 'next week' / 'sometime next week'
+        # 6. 'next week' / 'sometime next week'
         if "next week" in text:
             days_ahead = (7 - now_local.weekday()) % 7
             if days_ahead == 0:
                 days_ahead = 7
             target_date = now_local.date() + timedelta(days=days_ahead)
-            local_dt = user_tz.localize(datetime.combine(target_date, time(10, 0)))
+            local_dt = user_tz.localize(datetime.combine(target_date, time(10, 0, 0)))
             return local_dt.astimezone(timezone.utc)
 
-        # 6. Specific Day of week: 'friday', 'next monday', etc.
+        # 7. Specific Day of week: 'friday', 'next monday', etc.
         for day_name, day_code in WEEKDAYS.items():
             if day_name in text:
                 target_dt = now_local + relativedelta(weekday=day_code(+1))
                 target_dt = target_dt.replace(hour=17, minute=0, second=0, microsecond=0)
                 return target_dt.astimezone(timezone.utc)
 
-        # 7. Fallback generic dateutil parser
+        # 8. Fallback generic dateutil parser
         try:
-            parsed = date_parser.parse(text, fuzzy=True, default=now_local)
+            parsed = date_parser.parse(text, fuzzy=True, default=now_local.replace(minute=0, second=0, microsecond=0))
             if parsed.tzinfo is None:
                 parsed = user_tz.localize(parsed)
             return parsed.astimezone(timezone.utc)

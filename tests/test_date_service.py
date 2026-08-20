@@ -30,3 +30,21 @@ def test_parse_relative_hours():
 def test_parse_none():
     assert DateService.parse_relative_deadline(None) is None
     assert DateService.parse_relative_deadline("") is None
+
+def test_parse_at_6pm_with_timezone():
+    # When reference time is 2:00 PM IST (08:30 UTC)
+    ref = datetime(2026, 8, 20, 8, 30, 0, tzinfo=timezone.utc)
+    
+    # 1. With Asia/Kolkata timezone:
+    # 6:00 PM IST is 12:30 PM UTC
+    res_ist = DateService.parse_relative_deadline("lets do meeting at 6pm", reference_time=ref, user_timezone_str="Asia/Kolkata")
+    assert res_ist is not None
+    assert res_ist.hour == 12
+    assert res_ist.minute == 30
+
+    # 2. With UTC timezone:
+    # 6:00 PM UTC is 18:00 UTC (which renders as 11:30 PM in IST)
+    res_utc = DateService.parse_relative_deadline("lets do meeting at 6pm", reference_time=ref, user_timezone_str="UTC")
+    assert res_utc is not None
+    assert res_utc.hour == 18
+    assert res_utc.minute == 0
